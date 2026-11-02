@@ -1,437 +1,938 @@
 
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+/* =========================================================
+   LHN SUNSET STUDIO — FULL PHOTO ENGINE
+   Upload / Preview / Sunset / Canvas / Export / Download
+   ========================================================= */
 
-<title>LHN SUNSET STUDIO</title>
+(() => {
+  "use strict";
 
-<style>
-* {
-  box-sizing: border-box;
-}
+  // -------------------------------------------------------
+  // 1. DOM ELEMENTS
+  // -------------------------------------------------------
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  color: #fff4e8;
-  background: #21151b;
-}
+  const $ = (id) => document.getElementById(id);
 
-header {
-  padding: 24px;
-  text-align: center;
-  background: linear-gradient(
-    120deg,
-    #351b26,
-    #c94c35,
-    #ffad48
-  );
-}
+  const upload = $("upload");
+  const preview = $("preview");
+  const status = $("status");
 
-header h1 {
-  margin: 0;
-  font-size: 34px;
-  letter-spacing: 4px;
-}
+  const createBtn = $("create");
+  const downloadBtn = $("download");
 
-header p {
-  margin-bottom: 0;
-}
+  const styleSelect = $("style");
+  const colorSelect = $("color");
+  const sunSelect = $("sun");
+  const mirrorSelect = $("mirror");
+  const fogSelect = $("fog");
+  const cloudSelect = $("cloud");
+  const temperatureSelect = $("temperature");
+  const sizeSelect = $("size");
 
-main {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  padding: 20px;
-}
+  // -------------------------------------------------------
+  // 2. STATE
+  // -------------------------------------------------------
 
-.panel {
-  padding: 20px;
-  border: 1px solid #68404a;
-  border-radius: 16px;
-  background: #302028;
-}
+  let sourceImage = null;
+  let outputCanvas = null;
+  let sourceFileName = "sunset";
 
-h2 {
-  font-size: 18px;
-  color: #ffc16b;
-}
+  let processing = false;
 
-button,
-select,
-input {
-  font: inherit;
-}
+  // -------------------------------------------------------
+  // 3. CHECK HTML ELEMENTS
+  // -------------------------------------------------------
 
-button {
-  cursor: pointer;
-}
+  const requiredElements = [
+    upload,
+    preview,
+    status,
+    createBtn,
+    downloadBtn,
+    styleSelect,
+    colorSelect,
+    sunSelect,
+    mirrorSelect,
+    fogSelect,
+    cloudSelect,
+    temperatureSelect,
+    sizeSelect
+  ];
 
-button,
-select {
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid #8b554c;
-  background: #482b32;
-  color: white;
-}
+  const missingElements = requiredElements
+    .map((element, index) => ({
+      element,
+      name: [
+        "upload",
+        "preview",
+        "status",
+        "create",
+        "download",
+        "style",
+        "color",
+        "sun",
+        "mirror",
+        "fog",
+        "cloud",
+        "temperature",
+        "size"
+      ][index]
+    }))
+    .filter(item => !item.element);
 
-button:hover {
-  background: #784239;
-}
+  if (missingElements.length > 0) {
+    console.error(
+      "LHN SUNSET: Missing HTML elements:",
+      missingElements.map(item => item.name)
+    );
 
-input[type="file"] {
-  width: 100%;
-  margin: 15px 0;
-}
-
-label {
-  display: block;
-  margin: 14px 0 6px;
-}
-
-select {
-  width: 100%;
-}
-
-.preview {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1c1319;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.preview img {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-.primary {
-  background: linear-gradient(90deg, #ff8b27, #ffc45b);
-  color: #321c19;
-  font-weight: bold;
-}
-
-footer {
-  padding: 20px;
-  text-align: center;
-  color: #d7b8ad;
-}
-
-@media (max-width: 760px) {
-  main {
-    grid-template-columns: 1fr;
-    padding: 10px;
+    return;
   }
 
-  header h1 {
-    font-size: 26px;
+  // -------------------------------------------------------
+  // 4. STATUS
+  // -------------------------------------------------------
+
+  function setStatus(message, type = "info") {
+    status.textContent = message;
+
+    status.style.color =
+      type === "error"
+        ? "#ff8080"
+        : type === "success"
+        ? "#90e6a8"
+        : "#f6d8bd";
   }
-}
-</style>
-</head>
 
-<body>
+  function setProcessing(value) {
+    processing = value;
 
-<header>
-  <h1>LHN SUNSET</h1>
-  <p>PHOTO & ART AI STUDIO</p>
-  <p>Golden Hour Collection</p>
-</header>
+    createBtn.disabled = value;
 
-<main>
+    createBtn.textContent = value
+      ? "ĐANG XỬ LÝ..."
+      : "TẠO ẢNH SUNSET";
+  }
 
-<section class="panel">
+  // -------------------------------------------------------
+  // 5. LOAD IMAGE
+  // -------------------------------------------------------
 
-<h2>1. Ảnh đầu vào</h2>
+  upload.addEventListener("change", function () {
+    const file = upload.files && upload.files[0];
 
-<label for="upload">Tải ảnh phong cảnh</label>
+    if (!file) return;
 
-<input
-  type="file"
-  id="upload"
-  accept="image/png,image/jpeg,image/webp"
->
+    if (!file.type.startsWith("image/")) {
+      setStatus("File không phải ảnh hợp lệ.", "error");
+      return;
+    }
 
-<h2>2. Phong cách</h2>
+    if (file.size > 30 * 1024 * 1024) {
+      setStatus(
+        "Ảnh lớn hơn 30 MB. Hãy giảm dung lượng trước.",
+        "error"
+      );
+      upload.value = "";
+      return;
+    }
 
-<label for="style">Chọn phong cách</label>
+    setStatus("Đang đọc ảnh...");
 
-<select id="style">
-  <option>Classic Sunset</option>
-  <option>Misty Sunset</option>
-  <option>Golden Mirror</option>
-  <option>Pink Sunset</option>
-  <option>Dramatic Sky</option>
-  <option>Serene Evening</option>
-</select>
+    const reader = new FileReader();
 
-<h2>3. Tùy chỉnh</h2>
-
-<label for="color">Màu hoàng hôn</label>
-
-<select id="color">
-  <option value="orange">Cam vàng</option>
-  <option value="pink">Hồng đào</option>
-  <option value="red">Đỏ rực</option>
-  <option value="purple">Tím lam</option>
-  <option value="gold">Vàng kim</option>
-</select>
-
-<label for="sun">Mặt trời</label>
-
-<select id="sun">
-  <option>Có mặt trời</option>
-  <option>Sát đường chân trời</option>
-  <option>Không có mặt trời</option>
-</select>
-
-<label for="mirror">Phản chiếu mặt nước</label>
-
-<select id="mirror">
-  <option>Phản chiếu rõ</option>
-  <option>Phản chiếu nhẹ</option>
-  <option>Không phản chiếu</option>
-</select>
-
-<label for="fog">Sương mù</label>
-
-<select id="fog">
-  <option>Không</option>
-  <option>Nhẹ</option>
-  <option>Vừa</option>
-  <option>Dày</option>
-</select>
-
-<label for="cloud">Mây</label>
-
-<select id="cloud">
-  <option>Trời quang</option>
-  <option>Mây nhẹ</option>
-  <option>Mây đẹp</option>
-  <option>Mây kịch tính</option>
-</select>
-
-<label for="temperature">Nhiệt độ màu</label>
-
-<select id="temperature">
-  <option value="4800">4800K - Ấm nhẹ</option>
-  <option value="5500">5500K - Trung tính</option>
-  <option value="6500">6500K - Hoàng hôn ấm</option>
-  <option value="7500">7500K - Lạnh</option>
-</select>
-
-</section>
-
-<section class="panel">
-
-<h2>4. Preview</h2>
-
-<div class="preview">
-  <img id="preview" alt="Ảnh Sunset preview">
-</div>
-
-<h2>5. Kích thước xuất ảnh</h2>
-
-<select id="size">
-  <option value="2048x1536">
-    Facebook - 2048 x 1536
-  </option>
-
-  <option value="2048x2048">
-    Ảnh vuông - 2048 x 2048
-  </option>
-
-  <option value="1080x1920">
-    Story / Reels - 1080 x 1920
-  </option>
-
-  <option value="1920x1080">
-    Landscape - 1920 x 1080
-  </option>
-
-  <option value="3000">
-    Chiều dài 3000 px
-  </option>
-
-  <option value="7087x9449">
-    In 60 x 80 cm - 300 DPI
-  </option>
-</select>
-
-<div class="actions">
-
-<button class="primary" id="create">
-  TẠO ẢNH SUNSET
-</button>
-
-<button id="download">
-  TẢI ẢNH
-</button>
-
-</div>
-
-<p id="status">
-  Chưa có ảnh đầu vào.
-</p>
-
-</section>
-
-</main>
-
-<footer>
-  LHN STUDIO © SUNSET PHOTO & ART
-</footer>
-
-<script>
-
-const upload = document.getElementById("upload");
-const preview = document.getElementById("preview");
-const status = document.getElementById("status");
-
-let originalImage = null;
-let processedImage = null;
-
-upload.addEventListener("change", function () {
-  const file = upload.files[0];
-
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function (event) {
-    const img = new Image();
-
-    img.onload = function () {
-      originalImage = img;
-      processedImage = null;
-
-      preview.src = event.target.result;
-      preview.style.filter = "none";
-
-      status.textContent =
-        "Đã tải ảnh gốc. Hãy chọn hiệu ứng.";
+    reader.onerror = function () {
+      setStatus("Không đọc được file ảnh.", "error");
     };
 
-    img.src = event.target.result;
+    reader.onload = function (event) {
+      const img = new Image();
+
+      img.onerror = function () {
+        setStatus("Không thể mở ảnh này.", "error");
+      };
+
+      img.onload = function () {
+        sourceImage = img;
+
+        sourceFileName = file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[^\w\-]+/g, "-");
+
+        outputCanvas = null;
+
+        preview.style.filter = "none";
+
+        preview.src = event.target.result;
+
+        setStatus(
+          "Đã tải ảnh " +
+          img.naturalWidth +
+          " × " +
+          img.naturalHeight +
+          ". Sẵn sàng chỉnh Sunset.",
+          "success"
+        );
+      };
+
+      img.src = event.target.result;
+    };
+
+    reader.readAsDataURL(file);
+  });
+
+  // -------------------------------------------------------
+  // 6. SUNSET COLOR PRESETS
+  // -------------------------------------------------------
+
+  const colorPresets = {
+    orange: {
+      r: 1.10,
+      g: 1.02,
+      b: 0.83,
+      tint: [255, 115, 35],
+      tintAmount: 0.12
+    },
+
+    pink: {
+      r: 1.06,
+      g: 0.96,
+      b: 1.08,
+      tint: [255, 105, 160],
+      tintAmount: 0.10
+    },
+
+    red: {
+      r: 1.14,
+      g: 0.91,
+      b: 0.86,
+      tint: [210, 45, 45],
+      tintAmount: 0.12
+    },
+
+    purple: {
+      r: 0.96,
+      g: 0.91,
+      b: 1.12,
+      tint: [100, 70, 190],
+      tintAmount: 0.13
+    },
+
+    gold: {
+      r: 1.14,
+      g: 1.06,
+      b: 0.78,
+      tint: [255, 190, 55],
+      tintAmount: 0.14
+    }
   };
 
-  reader.readAsDataURL(file);
-});
-
-document.getElementById("create").addEventListener("click", function () {
-  if (!originalImage) {
-    status.textContent = "Hãy tải ảnh trước.";
-    return;
+  function getColorPreset() {
+    return colorPresets[colorSelect.value] ||
+      colorPresets.orange;
   }
 
-  const color = document.getElementById("color").value;
+  // -------------------------------------------------------
+  // 7. HELPERS
+  // -------------------------------------------------------
 
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
+  function clamp(value, min = 0, max = 255) {
+    return Math.max(min, Math.min(max, value));
+  }
 
-  canvas.width = originalImage.naturalWidth;
-  canvas.height = originalImage.naturalHeight;
+  function getSelectText(select) {
+    return select.options[select.selectedIndex]
+      ? select.options[select.selectedIndex].text
+      : "";
+  }
 
-  ctx.drawImage(
-    originalImage,
-    0,
-    0,
-    canvas.width,
-    canvas.height
+  function getTemperature() {
+    return Number(temperatureSelect.value) || 6500;
+  }
+
+  // -------------------------------------------------------
+  // 8. TARGET EXPORT SIZE
+  // -------------------------------------------------------
+
+  function getTargetSize() {
+    const value = sizeSelect.value;
+
+    if (value === "3000") {
+      return {
+        width: 3000,
+        height: 0,
+        mode: "long"
+      };
+    }
+
+    if (value === "7087x9449") {
+      return {
+        width: 7087,
+        height: 9449,
+        mode: "print"
+      };
+    }
+
+    const parts = value.split("x");
+
+    if (parts.length === 2) {
+      return {
+        width: Number(parts[0]),
+        height: Number(parts[1]),
+        mode: "fit"
+      };
+    }
+
+    return {
+      width: 2048,
+      height: 1536,
+      mode: "fit"
+    };
+  }
+
+  // -------------------------------------------------------
+  // 9. CREATE CANVAS
+  // -------------------------------------------------------
+
+  function createCanvas(width, height) {
+    const canvas = document.createElement("canvas");
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d", {
+      alpha: false
+    });
+
+    if (!ctx) {
+      throw new Error("Canvas không khả dụng.");
+    }
+
+    ctx.imageSmoothingEnabled = true;
+
+    ctx.imageSmoothingQuality = "high";
+
+    return {
+      canvas,
+      ctx
+    };
+  }
+
+  // -------------------------------------------------------
+  // 10. CROP IMAGE
+  // -------------------------------------------------------
+
+  function drawCover(ctx, image, width, height) {
+    const sourceWidth = image.naturalWidth;
+    const sourceHeight = image.naturalHeight;
+
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = width / height;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = sourceWidth;
+    let sh = sourceHeight;
+
+    if (sourceRatio > targetRatio) {
+      sw = sourceHeight * targetRatio;
+
+      sx = (sourceWidth - sw) / 2;
+    } else {
+      sh = sourceWidth / targetRatio;
+
+      sy = (sourceHeight - sh) / 2;
+    }
+
+    ctx.drawImage(
+      image,
+      sx,
+      sy,
+      sw,
+      sh,
+      0,
+      0,
+      width,
+      height
+    );
+  }
+
+  // -------------------------------------------------------
+  // 11. APPLY COLOR GRADING
+  // -------------------------------------------------------
+
+  function applyColorGrading(ctx, width, height) {
+    const imageData = ctx.getImageData(
+      0,
+      0,
+      width,
+      height
+    );
+
+    const pixels = imageData.data;
+
+    const preset = getColorPreset();
+
+    const temperature = getTemperature();
+
+    const temperatureShift =
+      (temperature - 5500) / 2000;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      let r = pixels[i];
+      let g = pixels[i + 1];
+      let b = pixels[i + 2];
+
+      // Sunset RGB grading
+      r *= preset.r;
+      g *= preset.g;
+      b *= preset.b;
+
+      // Temperature
+      r += temperatureShift * 12;
+      b -= temperatureShift * 12;
+
+      // Warm tint
+      const amount = preset.tintAmount;
+
+      r = r * (1 - amount) +
+          preset.tint[0] * amount;
+
+      g = g * (1 - amount) +
+          preset.tint[1] * amount;
+
+      b = b * (1 - amount) +
+          preset.tint[2] * amount;
+
+      pixels[i] = clamp(r);
+      pixels[i + 1] = clamp(g);
+      pixels[i + 2] = clamp(b);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  // -------------------------------------------------------
+  // 12. SUNLIGHT EFFECT
+  // -------------------------------------------------------
+
+  function applySun(ctx, width, height) {
+    const selected = getSelectText(sunSelect);
+
+    if (selected.includes("Không có")) {
+      return;
+    }
+
+    const x = width * 0.72;
+    const y = height * 0.38;
+
+    const radius = Math.min(width, height) * 0.24;
+
+    const gradient = ctx.createRadialGradient(
+      x,
+      y,
+      0,
+      x,
+      y,
+      radius
+    );
+
+    gradient.addColorStop(
+      0,
+      "rgba(255,220,135,0.45)"
+    );
+
+    gradient.addColorStop(
+      0.3,
+      "rgba(255,170,70,0.20)"
+    );
+
+    gradient.addColorStop(
+      1,
+      "rgba(255,120,40,0)"
+    );
+
+    ctx.save();
+
+    ctx.globalCompositeOperation = "screen";
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.restore();
+
+    // Sun disk
+    const sunRadius = Math.min(width, height) * 0.035;
+
+    ctx.save();
+
+    ctx.globalCompositeOperation = "screen";
+
+    ctx.fillStyle = "rgba(255,235,175,0.85)";
+
+    ctx.beginPath();
+
+    ctx.arc(
+      x,
+      y,
+      sunRadius,
+      0,
+      Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // 13. CLOUD EFFECT
+  // -------------------------------------------------------
+
+  function applyClouds(ctx, width, height) {
+    const selected = getSelectText(cloudSelect);
+
+    if (selected.includes("Trời quang")) {
+      return;
+    }
+
+    let opacity = 0.10;
+
+    if (selected.includes("Mây nhẹ")) {
+      opacity = 0.08;
+    }
+
+    if (selected.includes("Mây đẹp")) {
+      opacity = 0.14;
+    }
+
+    if (selected.includes("kịch tính")) {
+      opacity = 0.22;
+    }
+
+    const gradient = ctx.createLinearGradient(
+      0,
+      0,
+      0,
+      height * 0.65
+    );
+
+    gradient.addColorStop(
+      0,
+      `rgba(255,210,175,${opacity})`
+    );
+
+    gradient.addColorStop(
+      0.55,
+      `rgba(255,125,95,${opacity * 0.65})`
+    );
+
+    gradient.addColorStop(
+      1,
+      "rgba(255,100,60,0)"
+    );
+
+    ctx.save();
+
+    ctx.globalCompositeOperation = "screen";
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+      0,
+      0,
+      width,
+      height * 0.65
+    );
+
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // 14. FOG EFFECT
+  // -------------------------------------------------------
+
+  function applyFog(ctx, width, height) {
+    const selected = getSelectText(fogSelect);
+
+    if (selected.includes("Không")) {
+      return;
+    }
+
+    let opacity = 0.10;
+
+    if (selected.includes("Nhẹ")) {
+      opacity = 0.10;
+    }
+
+    if (selected.includes("Vừa")) {
+      opacity = 0.20;
+    }
+
+    if (selected.includes("Dày")) {
+      opacity = 0.34;
+    }
+
+    const gradient = ctx.createLinearGradient(
+      0,
+      height * 0.35,
+      0,
+      height
+    );
+
+    gradient.addColorStop(
+      0,
+      "rgba(255,230,220,0)"
+    );
+
+    gradient.addColorStop(
+      0.5,
+      `rgba(255,225,215,${opacity})`
+    );
+
+    gradient.addColorStop(
+      1,
+      `rgba(255,230,220,${opacity * 0.7})`
+    );
+
+    ctx.save();
+
+    ctx.globalCompositeOperation = "screen";
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+      0,
+      height * 0.35,
+      width,
+      height * 0.65
+    );
+
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // 15. WATER REFLECTION EFFECT
+  // -------------------------------------------------------
+
+  function applyMirror(ctx, width, height) {
+    const selected = getSelectText(mirrorSelect);
+
+    if (selected.includes("Không")) {
+      return;
+    }
+
+    const opacity = selected.includes("rõ")
+      ? 0.22
+      : 0.10;
+
+    const gradient = ctx.createLinearGradient(
+      0,
+      height * 0.55,
+      0,
+      height
+    );
+
+    gradient.addColorStop(
+      0,
+      "rgba(255,190,120,0)"
+    );
+
+    gradient.addColorStop(
+      0.5,
+      `rgba(255,165,90,${opacity})`
+    );
+
+    gradient.addColorStop(
+      1,
+      `rgba(255,130,60,${opacity * 0.5})`
+    );
+
+    ctx.save();
+
+    ctx.globalCompositeOperation = "screen";
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+      0,
+      height * 0.55,
+      width,
+      height * 0.45
+    );
+
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------
+  // 16. CREATE SUNSET IMAGE
+  // -------------------------------------------------------
+
+  function createSunsetImage() {
+    if (!sourceImage) {
+      throw new Error("Hãy tải ảnh đầu vào trước.");
+    }
+
+    const target = getTargetSize();
+
+    let width = target.width;
+    let height = target.height;
+
+    if (target.mode === "long") {
+      const ratio =
+        sourceImage.naturalWidth /
+        sourceImage.naturalHeight;
+
+      height = Math.round(width / ratio);
+    }
+
+    // Avoid oversized canvas allocations
+    const maxPixels = 40000000;
+
+    if (width * height > maxPixels) {
+      const scale = Math.sqrt(
+        maxPixels / (width * height)
+      );
+
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+
+    const result = createCanvas(width, height);
+
+    const ctx = result.ctx;
+    const canvas = result.canvas;
+
+    // Base image
+    drawCover(
+      ctx,
+      sourceImage,
+      width,
+      height
+    );
+
+    // Image processing order
+    applyColorGrading(
+      ctx,
+      width,
+      height
+    );
+
+    applyClouds(
+      ctx,
+      width,
+      height
+    );
+
+    applySun(
+      ctx,
+      width,
+      height
+    );
+
+    applyFog(
+      ctx,
+      width,
+      height
+    );
+
+    applyMirror(
+      ctx,
+      width,
+      height
+    );
+
+    return canvas;
+  }
+
+  // -------------------------------------------------------
+  // 17. CREATE BUTTON
+  // -------------------------------------------------------
+
+  createBtn.addEventListener("click", function () {
+    if (processing) return;
+
+    if (!sourceImage) {
+      setStatus(
+        "Hãy tải ảnh trước khi tạo Sunset.",
+        "error"
+      );
+
+      return;
+    }
+
+    try {
+      setProcessing(true);
+
+      setStatus("Đang xử lý ảnh Sunset...");
+
+      // Canvas work is synchronous
+      outputCanvas = createSunsetImage();
+
+      preview.src = outputCanvas.toDataURL(
+        "image/jpeg",
+        0.95
+      );
+
+      preview.style.filter = "none";
+
+      setStatus(
+        "Đã tạo ảnh Sunset " +
+        outputCanvas.width +
+        " × " +
+        outputCanvas.height +
+        ". Nhấn TẢI ẢNH để xuất.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error(
+        "LHN SUNSET processing error:",
+        error
+      );
+
+      setStatus(
+        "Lỗi xử lý ảnh: " +
+        (error.message || "Không xác định"),
+        "error"
+      );
+
+    } finally {
+      setProcessing(false);
+    }
+  });
+
+  // -------------------------------------------------------
+  // 18. EXPORT IMAGE
+  // -------------------------------------------------------
+
+  function exportImage(canvas, format = "image/jpeg") {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        function (blob) {
+          if (!blob) {
+            reject(
+              new Error("Không thể xuất ảnh.")
+            );
+
+            return;
+          }
+
+          resolve(blob);
+        },
+        format,
+        0.95
+      );
+    });
+  }
+
+  // -------------------------------------------------------
+  // 19. DOWNLOAD BUTTON
+  // -------------------------------------------------------
+
+  downloadBtn.addEventListener("click", async function () {
+    if (!outputCanvas) {
+      setStatus(
+        "Hãy nhấn TẠO ẢNH SUNSET trước khi tải.",
+        "error"
+      );
+
+      return;
+    }
+
+    try {
+      downloadBtn.disabled = true;
+
+      setStatus("Đang xuất ảnh...");
+
+      const blob = await exportImage(
+        outputCanvas,
+        "image/jpeg"
+      );
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+
+      link.download =
+        "LHN-SUNSET-" +
+        sourceFileName +
+        "-" +
+        outputCanvas.width +
+        "px.jpg";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 30000);
+
+      setStatus(
+        "Đã tải ảnh Sunset thành công.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error(
+        "LHN SUNSET export error:",
+        error
+      );
+
+      setStatus(
+        "Lỗi xuất ảnh: " +
+        (error.message || "Không xác định"),
+        "error"
+      );
+
+    } finally {
+      downloadBtn.disabled = false;
+    }
+  });
+
+  // -------------------------------------------------------
+  // 20. SETTINGS CHANGE
+  // -------------------------------------------------------
+
+  const settings = [
+    styleSelect,
+    colorSelect,
+    sunSelect,
+    mirrorSelect,
+    fogSelect,
+    cloudSelect,
+    temperatureSelect,
+    sizeSelect
+  ];
+
+  settings.forEach(function (element) {
+    element.addEventListener("change", function () {
+      if (outputCanvas) {
+        setStatus(
+          "Thông số đã thay đổi. Nhấn TẠO ẢNH SUNSET để cập nhật."
+        );
+      }
+    });
+  });
+
+  // -------------------------------------------------------
+  // 21. INITIAL STATE
+  // -------------------------------------------------------
+
+  preview.removeAttribute("src");
+
+  setStatus(
+    "LHN SUNSET sẵn sàng. Hãy tải ảnh phong cảnh."
   );
 
-  const imageData = ctx.getImageData(
-    0,
-    0,
-    canvas.width,
-    canvas.height
+  console.log(
+    "LHN SUNSET FULL PHOTO ENGINE initialized."
   );
 
-  const pixels = imageData.data;
-
-  for (let i = 0; i < pixels.length; i += 4) {
-    let r = pixels[i];
-    let g = pixels[i + 1];
-    let b = pixels[i + 2];
-
-    if (color === "orange") {
-      r = r * 1.08 + 12;
-      g = g * 1.02 + 5;
-      b = b * 0.88;
-    }
-
-    if (color === "pink") {
-      r = r * 1.05 + 8;
-      g = g * 0.95;
-      b = b * 1.08 + 12;
-    }
-
-    if (color === "red") {
-      r = r * 1.12 + 10;
-      g = g * 0.90;
-      b = b * 0.85;
-    }
-
-    if (color === "purple") {
-      r = r * 0.95 + 8;
-      g = g * 0.88;
-      b = b * 1.12 + 15;
-    }
-
-    if (color === "gold") {
-      r = r * 1.10 + 15;
-      g = g * 1.04 + 8;
-      b = b * 0.82;
-    }
-
-    pixels[i] = Math.min(255, Math.max(0, r));
-    pixels[i + 1] = Math.min(255, Math.max(0, g));
-    pixels[i + 2] = Math.min(255, Math.max(0, b));
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-
-  processedImage = canvas;
-
-  preview.src = canvas.toDataURL("image/jpeg", 0.95);
-  preview.style.filter = "none";
-
-  status.textContent =
-    "Đã tạo ảnh mới với hiệu ứng màu. Có thể tải xuống.";
-});
-
-document.getElementById("download").addEventListener("click", function () {
-  if (!processedImage) {
-    status.textContent =
-      "Hãy nhấn TẠO ẢNH SUNSET trước khi tải.";
-    return;
-  }
-
-  const link = document.createElement("a");
-
-  link.href = processedImage.toDataURL("image/jpeg", 0.95);
-  link.download = "LHN-SUNSET-EDITED.jpg";
-
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  status.textContent = "Đã xuất ảnh Sunset.";
-});
-
-</body>
-</html>
+})();
